@@ -1,0 +1,9 @@
+nav.links {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center
+}
+nav.links a {
+    margin-bottom: 2rem
+}
