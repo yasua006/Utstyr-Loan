@@ -15,7 +15,7 @@ using std::cerr;
 using std::endl;
 using std::string;
 
-string id_str = "Identifiser med id: ";
+string id_str = "Identifiser utstyret med id: ";
 
 
 // funksjon for assistering av preparasjoner
@@ -64,7 +64,7 @@ void hent(int &id, sqlite3 *db, sqlite3_stmt *&pSmt) {
         return;
     }
 
-    cout << "Har er hva vi fant: " << endl;
+    cout << endl << "Har er hva vi fant: " << endl << endl;
 
     auto navn = sqlite3_column_text(pSmt, 1);
     auto beskrivelse = sqlite3_column_text(pSmt, 2);
@@ -77,7 +77,7 @@ void hent(int &id, sqlite3 *db, sqlite3_stmt *&pSmt) {
     cout << "Beskrivelse: " << beskrivelse << endl;
     cout << "Utstyrs tilstand: " << tilstand << endl;
     cout << "Lånt av: " << lånt_av << endl;
-    cout << "Dato utlånt: " << dato_utlånt << endl;
+    cout << "Dato utlånt: " << dato_utlånt << endl << endl;
 
     // fjern ferdig gjort henting av databasen
     sqlite3_finalize(pSmt);
@@ -126,7 +126,7 @@ void inp_og_out(sqlite3 *db, string out_str, string &in_str, bool ignorer, bool 
 
         // håndtere tom input
         if (in_str.empty()) {
-            cerr << "Feltet kan ikke være tom!" << endl;
+            cout << "Feltet kan ikke være tom!" << endl;
             sqlite3_close_v2(db);
             return;
         }
@@ -137,7 +137,7 @@ void inp_og_out(sqlite3 *db, string out_str, string &in_str, bool ignorer, bool 
 
         // håndtere tom input
         if (in_str.empty()) {
-            cerr << "Feltet kan ikke være tom!" << endl;
+            cout << "Feltet kan ikke være tom!" << endl;
             sqlite3_close_v2(db);
             return;
         }
@@ -203,6 +203,7 @@ int main() {
         // utstyrs id for identifikasjon
         cout << id_str;
         cin >> dataen.id;
+        cin.ignore();
         // endre utstyrs navn
         inp_og_out(db, "Endre utstyrs navn: ", dataen.navn, false, true);
         // endre beskrivelse
@@ -266,7 +267,7 @@ int main() {
         int endre_step = sqlite3_step(pSmt);
 
         // håndtere feil ved kjøring av endre step
-        if (endre_step != SQLITE_OK) {
+        if (endre_step != SQLITE_DONE) {
             cerr << "Feil ved kjøring av endre: " << sqlite3_errmsg(db) << endl;
             sqlite3_finalize(pSmt);
             return 1;
@@ -341,7 +342,7 @@ int main() {
         int lag_step = sqlite3_step(pSmt);
 
         // håndtere feil ved kjøring av lag step
-        if (lag_step != SQLITE_OK) {
+        if (lag_step != SQLITE_DONE) {
             cerr << "Feil ved kjøring av lag: " << sqlite3_errmsg(db) << endl;
             sqlite3_finalize(pSmt);
             return 1;
@@ -360,7 +361,7 @@ int main() {
     // håndtere slett samtykke
     if (dataen.slett_samtykke == "ja") {
         // slett utstyr
-        cout << id_str;
+        cout << "Slett utstyret med id: ";
         cin >> dataen.id;
         // utstyr fjerning
         slett_prep(db, pSmt);
@@ -375,7 +376,7 @@ int main() {
         int slett_step = sqlite3_step(pSmt);
 
         // håndtere feil ved kjøring av slett step
-        if (slett_step != SQLITE_OK) {
+        if (slett_step != SQLITE_DONE) {
             cerr << "Feil ved kjøring av slett: " << sqlite3_errmsg(db) << endl;
             sqlite3_finalize(pSmt);
             return 1;
