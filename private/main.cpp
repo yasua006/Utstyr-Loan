@@ -341,12 +341,9 @@ int main() {
 
     // start utstyr preparasjon
     start_utstyr_prep(db, pSmt);
-    // start konto preparasjon
-    start_konto_prep(db, pSmt);
     // kjør start utstyr preperasjon
     int start_utstyr_step = sqlite3_step(pSmt);
-    // kjør start konto preperasjon
-    int start_konto_step = sqlite3_step(pSmt);
+
 
     // håndtere feil ved kjøring av start step
     if (start_utstyr_step != SQLITE_DONE || start_utstyr_step == 1) {
@@ -356,6 +353,15 @@ int main() {
         return 1;
     }
 
+    // fjern ferdig gjort start utstyr preparasjon
+    sqlite3_finalize(pSmt);
+    pSmt = nullptr;
+
+    // start konto preparasjon
+    start_konto_prep(db, pSmt);
+    // kjør start konto preperasjon
+    int start_konto_step = sqlite3_step(pSmt);
+
     // håndtere feil ved kjøring av start step
     if (start_konto_step != SQLITE_DONE || start_konto_step == 1) {
         cerr << "Feil ved kjøring av start konto: " << sqlite3_errmsg(db) << endl;
@@ -364,7 +370,7 @@ int main() {
         return 1;
     }
 
-    // fjern ferdig gjort start preparasjoner
+    // fjern ferdig gjort start konto preparasjon
     sqlite3_finalize(pSmt);
     pSmt = nullptr;
 
