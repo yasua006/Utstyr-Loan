@@ -42,7 +42,7 @@ int start_utstyr_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
 
 // funksjon til å håndtere start konto preparasjon
 int start_konto_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    return prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Konto (navn TEXT, passord TEXT, er_admin INTEGER)");
+    return prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Konto (navn TEXT, passord TEXT, er_admin INTEGER, UNIQUE (navn, passord))");
 }
 
 // funksjon til å håndtere laging preparasjon
@@ -519,6 +519,7 @@ int main() {
             if (navn == dataen.admin_navn && passord == dataen.admin_passord) {
                 dataen.admin_navn = navn;
                 dataen.admin_passord = passord;
+                dataen.er_admin = 1;
             // ikke en admin
             } else {
                 return crow::response(403);
