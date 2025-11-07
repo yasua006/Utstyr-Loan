@@ -4,4 +4,4 @@ utstyr.db
 .vscode
 node_modules
 package-lock.json
-private/skjema.ts
+private/skjemaer.ts
