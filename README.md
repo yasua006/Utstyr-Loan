@@ -6,7 +6,7 @@
 brew install crow asio
 ```
 
-- Init prosjektet:
+- Init prosjektet (oppdateringer også):
 ```
 g++ private/main.cpp -o main -I/opt/homebrew/opt/crow/include -I/opt/homebrew/include -std=c++17 -lsqlite3
 ```

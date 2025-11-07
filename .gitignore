@@ -5,3 +5,9 @@ utstyr.db
 node_modules
 package-lock.json
 private/skjemaer.ts
+firebase-debug.log
+firebase.json
+.firebaserc
+dataconnect
+src
+.firebase

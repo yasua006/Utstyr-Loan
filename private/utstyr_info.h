@@ -7,10 +7,9 @@ using std::string;
 
 // assign utstyr informasjon
 struct utstyr_info {
-    string bruker_navn;
-    string bruker_passord;
-    string admin_navn;
-    string admin_passord;
+    string admin_navn = "Utvikling";
+    string admin_passord = "UBrukerDrift";
+    int er_admin;
     int id;
     string navn;
     string beskrivelse;

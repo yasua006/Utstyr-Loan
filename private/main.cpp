@@ -42,7 +42,7 @@ int start_utstyr_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
 
 // funksjon til å håndtere start konto preparasjon
 int start_konto_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    return prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Konto (navn TEXT, passord TEXT)");
+    return prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Konto (navn TEXT, passord TEXT, er_admin INTEGER)");
 }
 
 // funksjon til å håndtere laging preparasjon
@@ -51,13 +51,13 @@ int legge_til_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
 }
 
 // funksjon til å håndtere endre preparasjon
-int endre_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
+int endre_til_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
     return prep_hjelper(db, pSmt, "UPDATE Utstyr SET navn = ?, beskrivelse = ?, tilstand = ?, lånt_av = ?, dato_utlånt = ? WHERE id = ?");
 }
 
-// funksjon til å håndtere logg inn insert preparasjon
+// funksjon til å håndtere admin logg inn insert preparasjon
 int logge_inn_insert_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    return prep_hjelper(db, pSmt, "INSERT INTO Konto (navn, passord) VALUES (?, ?)");
+    return prep_hjelper(db, pSmt, "INSERT INTO Konto (navn, passord, er_admin) VALUES (?, ?, ?)");
 }
 
 
@@ -128,7 +128,7 @@ int legge_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dataen)
 
 
 // funksjon til å håndtere endre kjøring
-int endre_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dataen) {
+int endre_til_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dataen) {
     // håndtere ugyldig id-er
     if (dataen.id <= 0) {
         cerr << "Ugyldig id!" << endl;
@@ -207,7 +207,7 @@ int logge_inn_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dat
     sqlite3_bind_text(
     pSmt,
     1,
-    dataen.bruker_navn.c_str(),
+    dataen.admin_navn.c_str(),
     -1,
     SQLITE_TRANSIENT
     );
@@ -216,15 +216,18 @@ int logge_inn_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dat
     sqlite3_bind_text(
     pSmt,
     2,
-    dataen.bruker_passord.c_str(),
+    dataen.admin_passord.c_str(),
     -1,
     SQLITE_TRANSIENT
     );
 
-    // kjøre endringen
+    // bind er admin
+    sqlite3_bind_int(pSmt, 3, dataen.er_admin);
+
+    // kjøre insert
     int step_resultat = sqlite3_step(pSmt);
 
-    // håndtere kjøre feil for endring
+    // håndtere kjøre feil for insert
     if (step_resultat != SQLITE_DONE) {
         cerr << "Feil ved kjøring av logg inn:" << sqlite3_errmsg(db) << endl;
         // fjern ferdig kjøring av logg inn
@@ -377,7 +380,8 @@ int main() {
     // lag appen
     crow::SimpleApp app;
 
-    // GET requests
+    crow::mustache::set_global_base("public");
+
     CROW_ROUTE(app, "/").methods("GET"_method)([](){
         auto side = crow::mustache::load("index.html");
         return side.render();
@@ -426,14 +430,19 @@ int main() {
 
     // POST request for registrering av utstyr (admin tilgang)
     CROW_ROUTE(app, "/skjema/legge/send").methods("POST"_method)([&](const crow::request& req){
-        crow::query_string qs(req.body);
+        // ikke en admin, uautorisert tilgang
+        if (!dataen.er_admin) {
+            return crow::response(403);
+        }
+
+        auto body_resultat = req.get_body_params();
 
         try {
-            auto navn = qs.get("navn");
-            auto beskrivelse = qs.get("beskrivelse");
-            auto tilstand = qs.get("tilstand");
-            auto lånt_av = qs.get("lånt-av");
-            auto dato_utlånt = qs.get("dato-utlånt");
+            auto navn = body_resultat.get("navn");
+            auto beskrivelse = body_resultat.get("beskrivelse");
+            auto tilstand = body_resultat.get("tilstand");
+            auto lånt_av = body_resultat.get("lont-av"); // UTF-8 grunner
+            auto dato_utlånt = body_resultat.get("dato-utlont");
 
             // håndtere query strings som finnes ikke
             if (!navn || !beskrivelse || !tilstand || !lånt_av || !dato_utlånt) {
@@ -449,7 +458,7 @@ int main() {
             legge_til_prep(db, pSmt);
             legge_bind_step(db, pSmt, dataen);
 
-            return crow::response(200, "Legg til: OK!");
+            return crow::response(200, "Legge til: OK!");
         } catch (int err) {
             return crow::response(400, std::to_string(err));
         }
@@ -457,15 +466,20 @@ int main() {
 
     // PUT request for redigering av utstyr (admin tilgang)
     CROW_ROUTE(app, "/skjema/endre/send").methods("POST"_method)([&](const crow::request &req){
-        crow::query_string qs(req.body);
+        // ikke en admin, uautorisert tilgang
+        if (!dataen.er_admin) {
+            return crow::response(403);
+        }
+
+        auto body_resultat = req.get_body_params();
 
         try {
-            auto id_str = qs.get("id");
-            auto navn = qs.get("navn");
-            auto beskrivelse = qs.get("beskrivelse");
-            auto tilstand = qs.get("tilstand");
-            auto lånt_av = qs.get("lånt-av");
-            auto dato_utlånt = qs.get("dato-utlånt");
+            auto id_str = body_resultat.get("id");
+            auto navn = body_resultat.get("navn");
+            auto beskrivelse = body_resultat.get("beskrivelse");
+            auto tilstand = body_resultat.get("tilstand");
+            auto lånt_av = body_resultat.get("lont-av");
+            auto dato_utlånt = body_resultat.get("dato-utlont");
 
             // håndtere query strings som finnes ikke
             if (!id_str || !navn || !beskrivelse || !tilstand || !lånt_av || !dato_utlånt) {
@@ -479,10 +493,10 @@ int main() {
             dataen.lånt_av = lånt_av;
             dataen.dato_utlånt = dato_utlånt;
 
-            endre_prep(db, pSmt);
-            endre_bind_step(db, pSmt, dataen);
+            endre_til_prep(db, pSmt);
+            endre_til_bind_step(db, pSmt, dataen);
 
-            return crow::response(200, "Endring: OK!");
+            return crow::response(200, "Endre til: OK!");
         } catch (int err) {
             return crow::response(400, std::to_string(err));
         }
@@ -490,19 +504,25 @@ int main() {
 
     // PUT request for å logge inn (sjekk om admin tilgang)
     CROW_ROUTE(app, "/skjema/logg-inn/send").methods("POST"_method)([&](const crow::request &req){
-        crow::query_string qs(req.body);
+        auto body_resultat = req.get_body_params();
 
         try {
-            auto navn = qs.get("navn");
-            auto passord = qs.get("passord");
+            auto navn = body_resultat.get("navn");
+            auto passord = body_resultat.get("passord");
 
             // håndtere query strings som finnes ikke
             if (!navn || !passord) {
                 return crow::response(400, "Kunne ikke logge inn!");
             }
 
-            dataen.bruker_navn = navn;
-            dataen.bruker_passord = passord;
+            // sjekk om brukeren skrev riktig admin navn og passord
+            if (navn == dataen.admin_navn && passord == dataen.admin_passord) {
+                dataen.admin_navn = navn;
+                dataen.admin_passord = passord;
+            // ikke en admin
+            } else {
+                return crow::response(403);
+            }
 
             logge_inn_insert_prep(db, pSmt);
             logge_inn_bind_step(db, pSmt, dataen);
