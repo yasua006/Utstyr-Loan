@@ -1,17 +1,21 @@
 #ifndef UTSTYR_INFO
 #define UTSTYR_INFO
 
+#include <string>
+
+using std::string;
+
 // assign utstyr informasjon
 struct utstyr_info {
-    std::string hent_samtykke;
-    std::string endre_samtykke;
-    std::string lag_samtykke;
-    std::string slett_samtykke;
+    string bruker_navn;
+    string bruker_passord;
+    string admin_navn;
+    string admin_passord;
     int id;
-    std::string navn;
-    std::string beskrivelse;
-    std::string tilstand;
-    std::string lånt_av;
-    std::string dato_utlånt;
+    string navn;
+    string beskrivelse;
+    string tilstand;
+    string lånt_av;
+    string dato_utlånt;
 };
 #endif

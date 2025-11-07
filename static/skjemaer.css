@@ -1,30 +1,34 @@
 header h1 {
-    margin-bottom: 3rem
+    margin-bottom: var(--space)
 }
-main form.utstyr-skjema {
+#skjema-text {
+    text-align: center
+}
+main form.skjema {
     align-content: center;
     display: grid;
     justify-items: center
 }
-main form.utstyr-skjema input,
+main form.skjema input,
 #submit-btn {
     border: none
 }
-main form.utstyr-skjema label, main form.utstyr-skjema input {
+main form.skjema label, main form.skjema input {
     height: clamp(50%, 4vh, 100%);
     margin-bottom: 0.5rem;
     width: clamp(60%, 15vw, 75%)
 }
 #submit-btn {
-    width: clamp(15%, 10vw, 25%);
+    border-radius: 0.5rem;
     margin-top: 2rem;
     transition: filter 500ms ease-in-out;
+    width: clamp(15%, 10vw, 25%);
     &:hover, &:focus {
         filter: brightness(0.65)
     }
 }
 @media (prefers-color-scheme: dark) {
-    main form.utstyr-skjema input,
+    main form.skjema input,
     #submit-btn {
         background-color: #444;
     }

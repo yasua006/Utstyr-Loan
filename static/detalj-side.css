@@ -1,9 +1,12 @@
-nav.links {
+main h2 {
+    margin: var(--space) 0
+}
+main p {
+    margin-bottom: 1.5rem
+}
+main div.utstyr-info {
     align-items: center;
     display: flex;
     flex-direction: column;
     justify-content: center
-}
-nav.links a {
-    margin-bottom: 2rem
 }

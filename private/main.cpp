@@ -1,25 +1,19 @@
 // få både input og output funksjonene
 #include <iostream>
-// få string funksjonen
-#include <string>
 // få sqlite3
 #include <sqlite3.h>
 // bruk headeren for å få utstyr info
 #include "utstyr_info.h"
 
+#include "crow.h"
+
 // mindre kopi lim inn
-using std::cin;
-using std::cout;
-using std::clog;
 using std::cerr;
 using std::endl;
-using std::string;
-
-string id_str = "Identifiser utstyret med id: ";
 
 
 // funksjon for assistering av preparasjoner
-void prep_hjelper(sqlite3 *db, sqlite3_stmt *&pSmt, const char *zSQL) {
+int prep_hjelper(sqlite3 *db, sqlite3_stmt *&pSmt, const char *zSQL) {
     // lag preparasjon
     int db_prep = sqlite3_prepare_v2 (
         db,
@@ -29,120 +23,292 @@ void prep_hjelper(sqlite3 *db, sqlite3_stmt *&pSmt, const char *zSQL) {
         NULL
     );
 
-    // håndtere sqlite feil på prep
+    // håndtere sqlite feil for preperasjon
     if (db_prep != SQLITE_OK) {
         cerr << "Feil ved kjøring av preparasjon: " << sqlite3_errmsg(db);
-        sqlite3_close_v2(db);
-        return;
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
+    }
+
+    return 0;
+}
+
+
+// funksjon til å håndtere start utstyr preparasjon
+int start_utstyr_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
+    return prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Utstyr (id INTEGER PRIMARY KEY, navn TEXT, beskrivelse TEXT, tilstand TEXT, lånt_av TEXT, dato_utlånt TEXT)");
+}
+
+// funksjon til å håndtere start konto preparasjon
+int start_konto_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
+    return prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Konto (navn TEXT, passord TEXT)");
+}
+
+// funksjon til å håndtere laging preparasjon
+int legge_til_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
+    return prep_hjelper(db, pSmt, "INSERT INTO Utstyr (navn, beskrivelse, tilstand, lånt_av, dato_utlånt) VALUES (?, ?, ?, ?, ?)");
+}
+
+// funksjon til å håndtere endre preparasjon
+int endre_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
+    return prep_hjelper(db, pSmt, "UPDATE Utstyr SET navn = ?, beskrivelse = ?, tilstand = ?, lånt_av = ?, dato_utlånt = ? WHERE id = ?");
+}
+
+// funksjon til å håndtere logg inn insert preparasjon
+int logge_inn_insert_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
+    return prep_hjelper(db, pSmt, "INSERT INTO Konto (navn, passord) VALUES (?, ?)");
+}
+
+
+// funksjon til å håndtere legge kjøring
+int legge_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dataen) {
+    // bind navn
+    sqlite3_bind_text(
+    pSmt,
+    1,
+    dataen.navn.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind beskrivelse
+    sqlite3_bind_text(
+    pSmt,
+    2,
+    dataen.beskrivelse.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind tilstand
+    sqlite3_bind_text(
+    pSmt,
+    3,
+    dataen.tilstand.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind lånt av
+    sqlite3_bind_text(
+    pSmt,
+    4,
+    dataen.lånt_av.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind dato utlånt
+    sqlite3_bind_text(
+    pSmt,
+    5,
+    dataen.dato_utlånt.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // kjøre endringen
+    int step_resultat = sqlite3_step(pSmt);
+
+    // håndtere kjøre feil for legging
+    if (step_resultat != SQLITE_DONE) {
+        cerr << "Feil ved kjøring av legge:" << sqlite3_errmsg(db) << endl;
+        // fjern ferdig kjøring av legge
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
+    }
+
+    // fjern ferdig kjøring av legge
+    sqlite3_finalize(pSmt);
+    pSmt = nullptr;
+    return 0;
+}
+
+
+// funksjon til å håndtere endre kjøring
+int endre_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dataen) {
+    // håndtere ugyldig id-er
+    if (dataen.id <= 0) {
+        cerr << "Ugyldig id!" << endl;
+        return 1;
+    }
+
+    // bind navn
+    sqlite3_bind_text(
+    pSmt,
+    1,
+    dataen.navn.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind beskrivelse
+    sqlite3_bind_text(
+    pSmt,
+    2,
+    dataen.beskrivelse.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind tilstand
+    sqlite3_bind_text(
+    pSmt,
+    3,
+    dataen.tilstand.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind lånt av
+    sqlite3_bind_text(
+    pSmt,
+    4,
+    dataen.lånt_av.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind dato utlånt
+    sqlite3_bind_text(
+    pSmt,
+    5,
+    dataen.dato_utlånt.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind id
+    sqlite3_bind_int(pSmt, 6, dataen.id);
+
+    // kjøre endringen
+    int step_resultat = sqlite3_step(pSmt);
+
+    // håndtere kjøre feil for endring
+    if (step_resultat != SQLITE_DONE) {
+        cerr << "Feil ved kjøring av endre:" << sqlite3_errmsg(db) << endl;
+        // fjern ferdig kjøring av endre
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
+    }
+
+    // fjern ferdig kjøring av endre
+    sqlite3_finalize(pSmt);
+    pSmt = nullptr;
+    return 0;
+}
+
+// funksjon til å håndtere logg inn kjøring
+int logge_inn_bind_step(sqlite3 *db, sqlite3_stmt *&pSmt, const utstyr_info& dataen) {
+    // bind navn
+    sqlite3_bind_text(
+    pSmt,
+    1,
+    dataen.bruker_navn.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // bind passord
+    sqlite3_bind_text(
+    pSmt,
+    2,
+    dataen.bruker_passord.c_str(),
+    -1,
+    SQLITE_TRANSIENT
+    );
+
+    // kjøre endringen
+    int step_resultat = sqlite3_step(pSmt);
+
+    // håndtere kjøre feil for endring
+    if (step_resultat != SQLITE_DONE) {
+        cerr << "Feil ved kjøring av logg inn:" << sqlite3_errmsg(db) << endl;
+        // fjern ferdig kjøring av logg inn
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
+    }
+
+    // fjern ferdig kjøring av logg inn
+    sqlite3_finalize(pSmt);
+    pSmt = nullptr;
+    return 0;
+}
+
+
+// funksjon til å håndtere henting av utstyr navn for oversikt
+int hent_navner(sqlite3 *db, sqlite3_stmt *&pSmt, crow::mustache::context &info) {
+    prep_hjelper(db, pSmt, "SELECT id, navn FROM Utstyr");
+
+    try {
+        int index = 0; // brukt for increment
+
+        // løkke til å gå gjennom alle rad med navn
+        while (sqlite3_step(pSmt) == SQLITE_ROW) {
+            crow::mustache::context rad;
+            // vis resultatet
+            rad["id"] = sqlite3_column_int(pSmt, 0);
+            // bytt bool til string
+            rad["navn"] = reinterpret_cast<const char*>(sqlite3_column_text(pSmt, 1));
+
+            // increment med 1
+            info["utstyr"][index++] = std::move(rad);
+        }
+
+        // fjern ferdig gjort henting av databasens navn radene
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 0;
+    } catch (int err) {
+        cerr << "Feil ved henting av navner:" << err << endl;
+        // fjern ferdig gjort henting av databasens navn radene
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
     }
 }
 
 
-// funksjon til å håndtere start preparasjon
-void start_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    prep_hjelper(db, pSmt, "CREATE TABLE IF NOT EXISTS Utstyr (id INTEGER PRIMARY KEY, navn TEXT, beskrivelse TEXT, tilstand TEXT, lånt_av TEXT, dato_utlånt TEXT)");
-}
-
-
-// funksjon til å håndtere henting
-void hent(int &id, sqlite3 *db, sqlite3_stmt *&pSmt) {
-    cout << id_str;
-    cin >> id;
+// funksjon til å håndtere henting av alt utstyr for detalj
+int hent_utstyr(sqlite3 *db, sqlite3_stmt *&pSmt, crow::mustache::context &info, int &id) {
+    // håndtere ugyldig id-er
+    if (id <= 0) {
+        cerr << "Ugyldig id!" << endl;
+        return 1;
+    }
 
     prep_hjelper(db, pSmt, "SELECT * FROM Utstyr WHERE id = ?");
 
-    int id_for_hent = sqlite3_bind_int(
-        pSmt,
-        1,
-        id
-    );
+    sqlite3_bind_int(pSmt, 1, id);
 
-    // håndtere ingen hent resultat og kjør henting av databasen
-    if (sqlite3_step(pSmt) != SQLITE_ROW) {
-        cout << "Ingen utstyr fant med id: " << id << endl;
+    try {
+        // løkke til å gå gjennom alle rad, utenom id-ene
+        if (sqlite3_step(pSmt) == SQLITE_ROW) {
+            // vis resultatet, men bytt bool til string
+            info["navn"] = reinterpret_cast<const char*>(sqlite3_column_text(pSmt, 1));
+            info["beskrivelse"] = reinterpret_cast<const char*>(sqlite3_column_text(pSmt, 2));
+            info["tilstand"] = reinterpret_cast<const char*>(sqlite3_column_text(pSmt, 3));
+            info["lånt av"] = reinterpret_cast<const char*>(sqlite3_column_text(pSmt, 4));
+            info["dato utlånt"] = reinterpret_cast<const char*>(sqlite3_column_text(pSmt, 5));
+        } else {
+            cerr << "Ingen rader fant!" << endl;
+            throw (info);
+        }
+
+        // fjern ferdig gjort henting av databasens radene
         sqlite3_finalize(pSmt);
-        return;
-    }
-
-    cout << endl << "Har er hva vi fant: " << endl << endl;
-
-    auto navn = sqlite3_column_text(pSmt, 1);
-    auto beskrivelse = sqlite3_column_text(pSmt, 2);
-    auto tilstand = sqlite3_column_text(pSmt, 3);
-    auto lånt_av = sqlite3_column_text(pSmt, 4);
-    auto dato_utlånt = sqlite3_column_text(pSmt, 5);
-
-    // logg resultatet
-    cout << "Utstyrs navn: " << navn << endl;
-    cout << "Beskrivelse: " << beskrivelse << endl;
-    cout << "Utstyrs tilstand: " << tilstand << endl;
-    cout << "Lånt av: " << lånt_av << endl;
-    cout << "Dato utlånt: " << dato_utlånt << endl << endl;
-
-    // fjern ferdig gjort henting av databasen
-    sqlite3_finalize(pSmt);
-}
-
-
-// funksjon til å håndtere endring preparasjon
-void endre_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    prep_hjelper(db, pSmt, "UPDATE Utstyr SET navn = ?, beskrivelse = ?, tilstand = ?, lånt_av = ?, dato_utlånt = ? WHERE id = ?");
-}
-
-
-// funksjon til å håndtere laging preparasjon
-void legge_til_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    prep_hjelper(db, pSmt, "INSERT INTO Utstyr (navn, beskrivelse, tilstand, lånt_av, dato_utlånt) VALUES (?, ?, ?, ?, ?)");
-}
-
-
-// funksjon til å håndtere fjerning preparasjon
-void slett_prep(sqlite3 *db, sqlite3_stmt *&pSmt) {
-    prep_hjelper(db, pSmt, "DELETE FROM Utstyr WHERE id = ?");
-}
-
-
-// funksjon til å håndtere input-er og output-er (ingen spacing)
-void inp_og_out(sqlite3 *db, string out_str, string &in_str, bool ignorer, bool få_linje) {
-    // håndtere ugyldig måte – både
-    if (ignorer && få_linje) {
-        cerr << "Kan ikke være både getline() og cin.ignore()!" << endl;
-        sqlite3_close_v2(db);
-        return;
-    // håndtere ugyldig måte – ingen
-    } else if (!ignorer && !få_linje) {
-        cerr << "Kan ikke være ingen måte!" << endl;
-        sqlite3_close_v2(db);
-        return;
-    }
-
-    // output
-    cout << out_str;
-
-    // input
-    if (ignorer) {
-        cin >> in_str;
-        cin.ignore(); // unngår input "skip"
-
-        // håndtere tom input
-        if (in_str.empty()) {
-            cout << "Feltet kan ikke være tom!" << endl;
-            sqlite3_close_v2(db);
-            return;
-        }
-
-        return;
-    } else if (få_linje) {
-        getline(cin, in_str); // få hele linjen
-
-        // håndtere tom input
-        if (in_str.empty()) {
-            cout << "Feltet kan ikke være tom!" << endl;
-            sqlite3_close_v2(db);
-            return;
-        }
-
-        return;
+        pSmt = nullptr;
+        return 0;
+    } catch (int err) {
+        cerr << "Feil ved henting av utstyret:" << err << endl;
+        // fjern ferdig gjort henting av databasens radene
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
     }
 }
 
@@ -151,13 +317,17 @@ int main() {
     // lag instance av utstyr informasjonen
     utstyr_info dataen;
 
-    sqlite3 *db;
-    sqlite3_stmt *pSmt = nullptr; // unngå random krasjer
+    // init id-en
+    dataen.id = 0;
+
+    // init pointers
+    sqlite3 *db = nullptr;
+    sqlite3_stmt *pSmt = nullptr;
 
     // lag en ny kobling til databasen
     int åpen = sqlite3_open_v2 (
         "utstyr.db",
-        &db, // koble til database filen
+        &db, // koble til databasens pointer
         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
         NULL // ingen VFS modul
     );
@@ -165,229 +335,181 @@ int main() {
     // håndtere sqlite feil på open
     if (åpen != SQLITE_OK) {
         cerr << "Feil ved åpning: " << sqlite3_errmsg(db);
-        sqlite3_finalize(pSmt);
+        sqlite3_close_v2(db);
         return 1;
     }
 
-    // start preparasjon
-    start_prep(db, pSmt);
-    // kjør start preperasjon
-    int start_step = sqlite3_step(pSmt);
+    // start utstyr preparasjon
+    start_utstyr_prep(db, pSmt);
+    // start konto preparasjon
+    start_konto_prep(db, pSmt);
+    // kjør start utstyr preperasjon
+    int start_utstyr_step = sqlite3_step(pSmt);
+    // kjør start konto preperasjon
+    int start_konto_step = sqlite3_step(pSmt);
 
     // håndtere feil ved kjøring av start step
-    if (start_step != SQLITE_DONE) {
-        cerr << "Feil ved kjøring av start: " << sqlite3_errmsg(db) << endl;
+    if (start_utstyr_step != SQLITE_DONE || start_utstyr_step == 1) {
+        cerr << "Feil ved kjøring av start utstyr: " << sqlite3_errmsg(db) << endl;
         sqlite3_finalize(pSmt);
+        pSmt = nullptr;
         return 1;
     }
 
-    // fjern ferdig gjort start preparasjon
+    // håndtere feil ved kjøring av start step
+    if (start_konto_step != SQLITE_DONE || start_konto_step == 1) {
+        cerr << "Feil ved kjøring av start konto: " << sqlite3_errmsg(db) << endl;
+        sqlite3_finalize(pSmt);
+        pSmt = nullptr;
+        return 1;
+    }
+
+    // fjern ferdig gjort start preparasjoner
     sqlite3_finalize(pSmt);
+    pSmt = nullptr;
 
-    inp_og_out(db, "Hent utstyr? (ja / nei) ", dataen.hent_samtykke, true, false);
+    // lag appen
+    crow::SimpleApp app;
 
-    // håndtere hent samtykke
-    if (dataen.hent_samtykke == "ja") {
-        hent(dataen.id, db, pSmt);
+    // GET requests
+    CROW_ROUTE(app, "/").methods("GET"_method)([](){
+        auto side = crow::mustache::load("index.html");
+        return side.render();
+    });
 
-        // slutt programmet
-        sqlite3_close_v2(db);
-        cout << "OK!";
-        return 0;
-    }
+    // detaljside for hvert utstyr
+    CROW_ROUTE(app, "/detalj-side/<int>").methods("GET"_method)([&](int id){
+        crow::mustache::context info;
 
-    inp_og_out(db, "Endre utstyr? (ja / nei) ", dataen.endre_samtykke, true, false);
-    
-    // håndtere endre samtykke
-    if (dataen.endre_samtykke == "ja") {
-        // utstyrs id for identifikasjon
-        cout << id_str;
-        cin >> dataen.id;
-        cin.ignore();
-        // endre utstyrs navn
-        inp_og_out(db, "Endre utstyrs navn: ", dataen.navn, false, true);
-        // endre beskrivelse
-        inp_og_out(db, "Endre beskrivelse: ", dataen.beskrivelse, false, true);
-        // endre tilstand
-        inp_og_out(db, "Endre tilstand: ", dataen.tilstand, false, true);
-        // endre lånt av
-        inp_og_out(db, "Endre lånt av: ", dataen.lånt_av, false, true);
-        // endre dato utlånt
-        inp_og_out(db, "Endre dato utlånt: ", dataen.dato_utlånt, false, true);
-        // utstyr endring
-        endre_prep(db, pSmt);
-
-        int endre_navn = sqlite3_bind_text(
-            pSmt,
-            1,
-            dataen.navn.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int endre_beskrivelse = sqlite3_bind_text(
-            pSmt,
-            2,
-            dataen.beskrivelse.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int endre_tilstand = sqlite3_bind_text(
-            pSmt,
-            3,
-            dataen.tilstand.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int endre_lånt_av = sqlite3_bind_text(
-            pSmt,
-            4,
-            dataen.lånt_av.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int endre_dato_utlånt = sqlite3_bind_text(
-            pSmt,
-            5,
-            dataen.dato_utlånt.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int id_for_endre = sqlite3_bind_int(
-            pSmt,
-            6,
-            dataen.id
-        );
-
-        // kjør endring av databasen
-        int endre_step = sqlite3_step(pSmt);
-
-        // håndtere feil ved kjøring av endre step
-        if (endre_step != SQLITE_DONE) {
-            cerr << "Feil ved kjøring av endre: " << sqlite3_errmsg(db) << endl;
-            sqlite3_finalize(pSmt);
-            return 1;
+        // håndtere feil ved henting av utstyret
+        if (hent_utstyr(db, pSmt, info, id) == 1) {
+            cerr << "400: Henting" << endl;
         }
 
-        // fjern ferdig lagde endring av databasen
-        sqlite3_finalize(pSmt);
-        // slutt programmet
-        sqlite3_close_v2(db);
-        cout << "OK!";
-        return 0;
-    }
+        auto side = crow::mustache::load("detalj-side.html");
+        return side.render(info);
+    });
 
-    inp_og_out(db, "Lag utstyr? (ja / nei) ", dataen.lag_samtykke, true, false);
-    
-    // håndtere lag samtykke
-    if (dataen.lag_samtykke == "ja") {
-        // lag utstyrs navn
-        inp_og_out(db, "Lag utstyrs navn: ", dataen.navn, false, true);
-        // lag beskrivelse
-        inp_og_out(db, "Lag beskrivelse: ", dataen.beskrivelse, false, true);
-        // lag tilstand
-        inp_og_out(db, "Lag tilstand: ", dataen.tilstand, false, true);
-        // lag lånt av
-        inp_og_out(db, "Lag lånt av: ", dataen.lånt_av, false, true);
-        // lag dato utlånt
-        inp_og_out(db, "Lag dato utlånt: ", dataen.dato_utlånt, false, true);
-        // utstyr laging
-        legge_til_prep(db, pSmt);
+    // oversikt over alt utstyr
+    CROW_ROUTE(app, "/oversikt").methods("GET"_method)([&](){
+        crow::mustache::context info;
 
-        int lag_navn = sqlite3_bind_text(
-            pSmt,
-            1,
-            dataen.navn.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int lag_beskrivelse = sqlite3_bind_text(
-            pSmt,
-            2,
-            dataen.beskrivelse.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int lag_tilstand = sqlite3_bind_text(
-            pSmt,
-            3,
-            dataen.tilstand.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int lag_lånt_av = sqlite3_bind_text(
-            pSmt,
-            4,
-            dataen.lånt_av.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        int lag_dato_utlånt = sqlite3_bind_text(
-            pSmt,
-            5,
-            dataen.dato_utlånt.c_str(),
-            -1, // kjør til null skjer
-            SQLITE_TRANSIENT
-        );
-
-        // kjør laging av databasen
-        int lag_step = sqlite3_step(pSmt);
-
-        // håndtere feil ved kjøring av lag step
-        if (lag_step != SQLITE_DONE) {
-            cerr << "Feil ved kjøring av lag: " << sqlite3_errmsg(db) << endl;
-            sqlite3_finalize(pSmt);
-            return 1;
+        // håndtere feil ved henting av navner
+        if (hent_navner(db, pSmt, info) == 1) {
+            cerr << "400: Henting" << endl;
         }
 
-        // fjern ferdig lagde laging av databasen
-        sqlite3_finalize(pSmt);
-        // slutt programmet
-        sqlite3_close_v2(db);
-        cout << "OK!";
-        return 0;
-    }
-    
-    inp_og_out(db, "Slett utstyr? (ja / nei) ", dataen.slett_samtykke, true, false);
+        auto side = crow::mustache::load("oversikt.html");
+        return side.render(info);
+    });
 
-    // håndtere slett samtykke
-    if (dataen.slett_samtykke == "ja") {
-        // slett utstyr
-        cout << "Slett utstyret med id: ";
-        cin >> dataen.id;
-        // utstyr fjerning
-        slett_prep(db, pSmt);
+    CROW_ROUTE(app, "/skjema/legge").methods("GET"_method)([](){
+        auto side = crow::mustache::load("skjema/legge.html");
+        return side.render();
+    });
 
-        int id_for_slett = sqlite3_bind_int(
-            pSmt,
-            1,
-            dataen.id
-        );
+    CROW_ROUTE(app, "/skjema/endre").methods("GET"_method)([](){
+        auto side = crow::mustache::load("skjema/endre.html");
+        return side.render();
+    });
 
-        // kjør fjerning av databasen
-        int slett_step = sqlite3_step(pSmt);
+    CROW_ROUTE(app, "/skjema/logg-inn").methods("GET"_method)([](){
+        auto side = crow::mustache::load("skjema/logg-inn.html");
+        return side.render();
+    });
 
-        // håndtere feil ved kjøring av slett step
-        if (slett_step != SQLITE_DONE) {
-            cerr << "Feil ved kjøring av slett: " << sqlite3_errmsg(db) << endl;
-            sqlite3_finalize(pSmt);
-            return 1;
+    // POST request for registrering av utstyr (admin tilgang)
+    CROW_ROUTE(app, "/skjema/legge/send").methods("POST"_method)([&](const crow::request& req){
+        crow::query_string qs(req.body);
+
+        try {
+            auto navn = qs.get("navn");
+            auto beskrivelse = qs.get("beskrivelse");
+            auto tilstand = qs.get("tilstand");
+            auto lånt_av = qs.get("lånt-av");
+            auto dato_utlånt = qs.get("dato-utlånt");
+
+            // håndtere query strings som finnes ikke
+            if (!navn || !beskrivelse || !tilstand || !lånt_av || !dato_utlånt) {
+                return crow::response(400, "Kunne ikke legge radene!");
+            }
+
+            dataen.navn = navn;
+            dataen.beskrivelse = beskrivelse;
+            dataen.tilstand = tilstand;
+            dataen.lånt_av = lånt_av;
+            dataen.dato_utlånt = dato_utlånt;
+
+            legge_til_prep(db, pSmt);
+            legge_bind_step(db, pSmt, dataen);
+
+            return crow::response(200, "Legg til: OK!");
+        } catch (int err) {
+            return crow::response(400, std::to_string(err));
         }
+    });
 
-        // fjern ferdig gjort fjerning av databasen
-        sqlite3_finalize(pSmt);
-    }
+    // PUT request for redigering av utstyr (admin tilgang)
+    CROW_ROUTE(app, "/skjema/endre/send").methods("POST"_method)([&](const crow::request &req){
+        crow::query_string qs(req.body);
+
+        try {
+            auto id_str = qs.get("id");
+            auto navn = qs.get("navn");
+            auto beskrivelse = qs.get("beskrivelse");
+            auto tilstand = qs.get("tilstand");
+            auto lånt_av = qs.get("lånt-av");
+            auto dato_utlånt = qs.get("dato-utlånt");
+
+            // håndtere query strings som finnes ikke
+            if (!id_str || !navn || !beskrivelse || !tilstand || !lånt_av || !dato_utlånt) {
+                return crow::response(400, "Kunne ikke endre radene!");
+            }
+
+            dataen.id = std::stoi(id_str);
+            dataen.navn = navn;
+            dataen.beskrivelse = beskrivelse;
+            dataen.tilstand = tilstand;
+            dataen.lånt_av = lånt_av;
+            dataen.dato_utlånt = dato_utlånt;
+
+            endre_prep(db, pSmt);
+            endre_bind_step(db, pSmt, dataen);
+
+            return crow::response(200, "Endring: OK!");
+        } catch (int err) {
+            return crow::response(400, std::to_string(err));
+        }
+    });
+
+    // PUT request for å logge inn (sjekk om admin tilgang)
+    CROW_ROUTE(app, "/skjema/logg-inn/send").methods("POST"_method)([&](const crow::request &req){
+        crow::query_string qs(req.body);
+
+        try {
+            auto navn = qs.get("navn");
+            auto passord = qs.get("passord");
+
+            // håndtere query strings som finnes ikke
+            if (!navn || !passord) {
+                return crow::response(400, "Kunne ikke logge inn!");
+            }
+
+            dataen.bruker_navn = navn;
+            dataen.bruker_passord = passord;
+
+            logge_inn_insert_prep(db, pSmt);
+            logge_inn_bind_step(db, pSmt, dataen);
+
+            return crow::response(200, "Logg inn: OK!");
+        } catch (int err) {
+            return crow::response(400, std::to_string(err));
+        }
+    });
+
+    app.port(18080).run();
 
     // slutt programmet
     sqlite3_close_v2(db);
-    cout << "OK!";
     return 0;
 }
