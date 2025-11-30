@@ -18,7 +18,3 @@ g++ private/main.cpp -o main -I/opt/homebrew/opt/crow/include -I/opt/homebrew/in
 
 ## For init og kjøring på Windows:
 [Using GCC with MinGW](https://code.visualstudio.com/docs/cpp/config-mingw)
-
-
-## Hva fungerer ikke:
-• Alle skjemaer
